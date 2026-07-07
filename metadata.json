@@ -1,0 +1,6 @@
+{
+  "name": "Sistem SKGB PNS dan PPPK Cabdisdik XIII",
+  "description": "Aplikasi manajemen, notifikasi, dan cetak otomatis Surat Keputusan Kenaikan Gaji Berkala (SKGB) Aparatur Sipil Negara (PNS dan PPPK) pada Cabang Dinas Pendidikan Wilayah XIII Provinsi Jawa Barat.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

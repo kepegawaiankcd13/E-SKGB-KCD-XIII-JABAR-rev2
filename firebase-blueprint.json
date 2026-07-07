@@ -1,0 +1,100 @@
+{
+  "entities": {
+    "Pegawai": {
+      "title": "Pegawai",
+      "description": "Data pegawai ASN (PNS & PPPK)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nama": { "type": "string" },
+        "tempatLahir": { "type": "string" },
+        "tanggalLahir": { "type": "string" },
+        "nip": { "type": "string" },
+        "pangkatGolongan": { "type": "string" },
+        "jabatan": { "type": "string" },
+        "unitKerja": { "type": "string" },
+        "gajiPokokLama": { "type": "number" },
+        "noHp": { "type": "string" },
+        "email": { "type": "string" },
+        "skOlehPejabat": { "type": "string" },
+        "skNomor": { "type": "string" },
+        "skTanggal": { "type": "string" },
+        "skTglMulaiBerlaku": { "type": "string" },
+        "skMasaKerjaTahun": { "type": "number" },
+        "skMasaKerjaBulan": { "type": "number" },
+        "hasPMK": { "type": "boolean" },
+        "pmkTahun": { "type": "number" },
+        "pmkBulan": { "type": "number" },
+        "pmkNomor": { "type": "string" },
+        "pmkTanggal": { "type": "string" },
+        "gajiPokokBaru": { "type": "number" },
+        "pangkatGolonganBaru": { "type": "string" },
+        "mkTahunBaru": { "type": "number" },
+        "mkBulanBaru": { "type": "number" },
+        "tmtBaru": { "type": "string" },
+        "tmtAkanDatang": { "type": "string" },
+        "noSuratBaru": { "type": "string" },
+        "statusKGB": { "type": "string" }
+      },
+      "required": ["id", "nama", "nip", "pangkatGolongan", "jabatan", "unitKerja"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Log aktivitas admin di aplikasi",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "adminUser": { "type": "string" },
+        "action": { "type": "string" },
+        "detail": { "type": "string" }
+      },
+      "required": ["id", "timestamp", "adminUser", "action", "detail"]
+    },
+    "SystemSettings": {
+      "title": "SystemSettings",
+      "description": "Pengaturan sistem seperti KOP Surat dan Spesimen TTD",
+      "type": "object",
+      "properties": {
+        "kop": { "type": "object" },
+        "spesimen": { "type": "object" },
+        "nomorSuratCounter": { "type": "string" },
+        "regulasiPNS": { "type": "string" },
+        "regulasiPPPK": { "type": "string" }
+      }
+    },
+    "StaffUser": {
+      "title": "StaffUser",
+      "description": "Akun staff / pengguna aplikasi ini",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "username", "name", "role", "status"]
+    }
+  },
+  "firestore": {
+    "/pegawai/{documentId}": {
+      "schema": "Pegawai",
+      "description": "Koleksi data pegawai ASN"
+    },
+    "/activity_logs/{documentId}": {
+      "schema": "ActivityLog",
+      "description": "Koleksi log aktivitas sistem"
+    },
+    "/settings/{documentId}": {
+      "schema": "SystemSettings",
+      "description": "Koleksi pengaturan sistem"
+    },
+    "/staff_users/{documentId}": {
+      "schema": "StaffUser",
+      "description": "Koleksi akun staff"
+    }
+  }
+}
