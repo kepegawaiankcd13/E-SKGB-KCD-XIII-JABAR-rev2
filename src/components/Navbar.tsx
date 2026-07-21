@@ -51,7 +51,7 @@ export default function Navbar({ currentTab, setCurrentTab, onLogout, activeUser
           />
           <div className="overflow-hidden">
             <h1 className="text-white font-bold leading-none text-sm truncate">E-SKGB JABAR</h1>
-            <span className="text-slate-400 text-[10px] uppercase tracking-wider block mt-0.5">Disdik KCD XIII</span>
+            <span className="text-slate-400 text-[10px] uppercase tracking-wider block mt-0.5">Cadisdik WIl. XIII</span>
           </div>
         </div>
         
