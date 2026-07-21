@@ -417,11 +417,62 @@ export default function DatabaseGrid({
       }
     });
 
+    const originalGetComputedStyle = window.getComputedStyle;
+    const convertOklchToRgb = (colorStr: string): string => {
+      if (!colorStr || typeof colorStr !== 'string') return colorStr;
+      if (!colorStr.includes('oklch') && !colorStr.includes('oklab')) return colorStr;
+      
+      return colorStr.replace(/(oklch|oklab)\([^)]+\)/g, (match) => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = 1;
+          canvas.height = 1;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = match;
+            ctx.fillRect(0, 0, 1, 1);
+            const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+            return `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(3)})`;
+          }
+        } catch (e) {
+          // fallback
+        }
+        return 'rgb(120, 120, 120)';
+      });
+    };
+
+    const restoreStyle = () => {
+      window.getComputedStyle = originalGetComputedStyle;
+    };
+
+    window.getComputedStyle = function(el, pseudo) {
+      const style = originalGetComputedStyle.call(this, el, pseudo);
+      return new Proxy(style, {
+        get(target, prop) {
+          if (prop === 'getPropertyValue') {
+            return function(propertyName: string) {
+              const val = target.getPropertyValue(propertyName);
+              return convertOklchToRgb(val);
+            };
+          }
+          const val = Reflect.get(target, prop);
+          if (typeof val === 'string') {
+            return convertOklchToRgb(val);
+          }
+          if (typeof val === 'function') {
+            return val.bind(target);
+          }
+          return val;
+        }
+      });
+    };
+
     import("html2pdf.js").then((html2pdfModule) => {
       const html2pdf = html2pdfModule.default;
       const element = document.getElementById("skgb-direct-print-preview-container");
       
       if (!element) {
+        restoreStyle();
         Swal.fire({
           title: "Kesalahan",
           text: "Gagal menemukan area dokumen untuk diunduh.",
@@ -481,6 +532,7 @@ export default function DatabaseGrid({
 
       generatePDF(2.0)
         .then(() => {
+          restoreStyle();
           Swal.fire({
             title: "PDF Berhasil Diunduh!",
             text: "Berkas PDF SKGB telah berhasil disimpan ke perangkat Anda.",
@@ -492,6 +544,7 @@ export default function DatabaseGrid({
           console.warn("PDF render attempt at scale 2.0 failed, retrying at scale 1.5...", err);
           generatePDF(1.5)
             .then(() => {
+              restoreStyle();
               Swal.fire({
                 title: "PDF Berhasil Diunduh!",
                 text: "Berkas PDF SKGB berhasil diunduh dengan penyesuaian resolusi.",
@@ -500,6 +553,7 @@ export default function DatabaseGrid({
               });
             })
             .catch((retryErr: any) => {
+              restoreStyle();
               console.error("All PDF render attempts failed:", retryErr);
               Swal.fire({
                 title: "Gagal Membuat PDF",
@@ -509,6 +563,7 @@ export default function DatabaseGrid({
             });
         });
     }).catch(err => {
+      restoreStyle();
       console.error(err);
       Swal.fire({
         title: "Gagal Mengunduh",
@@ -2214,7 +2269,7 @@ export default function DatabaseGrid({
 
     {/* Direct Print & Pratinjau SKGB Modal */}
     {directPrintPegawai && (
-      <div className="fixed inset-0 bg-slate-900/85 backdrop-blur-md flex items-center justify-center p-4 z-50 font-sans print:p-0 print:static print:bg-white print:inset-auto">
+      <div className="direct-print-modal-container fixed inset-0 bg-slate-900/85 backdrop-blur-md flex items-center justify-center p-4 z-50 font-sans print:p-0 print:static print:bg-white print:inset-auto">
         <div className="bg-white rounded-2xl w-full max-w-6xl shadow-2xl border border-slate-200 flex flex-col h-[90vh] overflow-hidden print:h-auto print:shadow-none print:border-none print:static">
           
           {/* Modal Header - HIDDEN ON PRINT */}

@@ -22,9 +22,11 @@ interface NavbarProps {
   setCurrentTab: (tab: string) => void;
   onLogout: () => void;
   activeUser: StaffUser | null;
+  isFirebaseConnected?: boolean;
+  connectionError?: string | null;
 }
 
-export default function Navbar({ currentTab, setCurrentTab, onLogout, activeUser }: NavbarProps) {
+export default function Navbar({ currentTab, setCurrentTab, onLogout, activeUser, isFirebaseConnected = true, connectionError = null }: NavbarProps) {
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: BarChart3 },
     { id: "database", label: "Data Pegawai", icon: Users },
@@ -41,16 +43,45 @@ export default function Navbar({ currentTab, setCurrentTab, onLogout, activeUser
       {/* Brand Header */}
       <div className="p-6 border-b border-slate-800">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-indigo-500 rounded flex items-center justify-center font-bold text-white shrink-0">
-            SJ
-          </div>
+          <img 
+            src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Lambang_Pemerintah_Provinsi_Jawa_Barat.svg/512px-Lambang_Pemerintah_Provinsi_Jawa_Barat.svg.png" 
+            alt="Logo Jabar" 
+            className="w-9 h-9 object-contain shrink-0"
+            referrerPolicy="no-referrer"
+          />
           <div className="overflow-hidden">
             <h1 className="text-white font-bold leading-none text-sm truncate">E-SKGB JABAR</h1>
             <span className="text-slate-400 text-[10px] uppercase tracking-wider block mt-0.5">Disdik KCD XIII</span>
           </div>
         </div>
-        <div className="mt-4 text-[10px] text-center text-slate-400 bg-slate-800/60 px-2.5 py-1 rounded border border-slate-700/60 w-full truncate">
-          Provinsi Jawa Barat
+        
+        {/* Connection Indicator status */}
+        <div className="mt-4 text-[10px] bg-slate-850/80 px-2.5 py-1.5 rounded-lg border border-slate-800 flex items-center justify-center gap-2 font-sans">
+          {connectionError ? (
+            <>
+              <div className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+              </div>
+              <span className="text-rose-400 font-medium text-[9px] tracking-wide">Mongo Blocked IP</span>
+            </>
+          ) : isFirebaseConnected ? (
+            <>
+              <div className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </div>
+              <span className="text-emerald-400 font-bold text-[9px] tracking-wide uppercase">Mongo Connected</span>
+            </>
+          ) : (
+            <>
+              <div className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+              </div>
+              <span className="text-amber-400 font-medium text-[9px] tracking-wide">Mongo Offline</span>
+            </>
+          )}
         </div>
       </div>
 

@@ -106,10 +106,17 @@ export default function App() {
             setPegawaiList(remotePegawai);
             localStorage.setItem("skgb_pegawai", JSON.stringify(remotePegawai));
           } else {
-            console.log("MongoDB pegawai kosong, mengunggah data bawaan awal...");
-            // Seed pegawai if remote is blank
-            for (const peg of initialPegawaiList) {
-              await savePegawaiToFirestore(peg);
+            console.log("MongoDB pegawai kosong, mengunggah data lokal...");
+            const localPeg = pegawaiList && pegawaiList.length > 0 ? pegawaiList : initialPegawaiList;
+            if (localPeg && localPeg.length > 0) {
+              for (const peg of localPeg) {
+                await savePegawaiToFirestore(peg);
+              }
+              const refetched = await getPegawaiFromFirestore();
+              if (refetched && refetched.length > 0) {
+                setPegawaiList(refetched);
+                localStorage.setItem("skgb_pegawai", JSON.stringify(refetched));
+              }
             }
           }
 
@@ -117,16 +124,17 @@ export default function App() {
             setSettings(remoteSettings);
             localStorage.setItem("skgb_settings", JSON.stringify(remoteSettings));
           } else {
-            console.log("MongoDB settings kosong, mengunggah settings bawaan...");
-            await saveSettingsToFirestore(initialSystemSettings);
+            console.log("MongoDB settings kosong, mengunggah settings lokal...");
+            await saveSettingsToFirestore(settings);
           }
 
           if (remoteLogs && remoteLogs.length > 0) {
             setLogs(remoteLogs);
             localStorage.setItem("skgb_logs", JSON.stringify(remoteLogs));
           } else {
-            console.log("MongoDB logs kosong, mengunggah rekam aktivitas awal...");
-            for (const log of initialActivityLogs) {
+            console.log("MongoDB logs kosong, mengunggah logs lokal...");
+            const localLogs = logs && logs.length > 0 ? logs : initialActivityLogs;
+            for (const log of localLogs) {
               await saveLogToFirestore(log);
             }
           }
@@ -146,8 +154,9 @@ export default function App() {
               }
             }
           } else {
-            console.log("MongoDB staff kosong, mengunggah staf bawaan awal...");
-            for (const st of initialStaffUserList) {
+            console.log("MongoDB staff kosong, mengunggah staff lokal...");
+            const localStaff = staffList && staffList.length > 0 ? staffList : initialStaffUserList;
+            for (const st of localStaff) {
               await saveStaffToFirestore(st);
             }
           }
@@ -721,13 +730,15 @@ export default function App() {
           }} 
           onLogout={handleLogout} 
           activeUser={activeUser}
+          isFirebaseConnected={isFirebaseConnected}
+          connectionError={connectionError}
         />
 
         {/* Core Screen Area */}
         <main className="flex-1 p-6 md:p-8 overflow-y-auto print:p-0 print:overflow-visible animate-fadeIn">
           
           {connectionError && (
-            <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl text-xs space-y-2">
+            <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl text-xs space-y-2 print:hidden">
               <div className="flex items-center gap-2 font-bold text-rose-900">
                 <ShieldAlert size={16} />
                 <span>Koneksi Database Cloud Terhambat (MongoDB Atlas Whitelist)</span>
