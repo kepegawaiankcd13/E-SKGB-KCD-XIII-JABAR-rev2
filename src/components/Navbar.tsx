@@ -63,7 +63,9 @@ export default function Navbar({ currentTab, setCurrentTab, onLogout, activeUser
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
               </div>
-              <span className="text-rose-400 font-medium text-[9px] tracking-wide">Mongo Blocked IP</span>
+              <span className="text-rose-400 font-medium text-[9px] tracking-wide">
+                {connectionError.includes("MONGODB_URI_MISSING") ? "URI Belum Diatur" : "Mongo Blocked IP"}
+              </span>
             </>
           ) : isFirebaseConnected ? (
             <>
