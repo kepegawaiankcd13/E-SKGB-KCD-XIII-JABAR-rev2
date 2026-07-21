@@ -234,7 +234,7 @@ export default function PrintTemplate({
 
   return (
     <div
-      className="print-page font-sans w-full max-w-[215mm] mx-auto px-[10mm] pt-[16mm] pb-[14mm] select-text border print:border-none print:p-0 print:mx-0 print:max-w-none print:min-h-0 min-h-[330mm] flex flex-col justify-between"
+      className="print-page font-sans w-full max-w-[215mm] mx-auto px-[15mm] pt-[16mm] pb-[14mm] select-text border print:border-none print:p-0 print:mx-0 print:max-w-none print:min-h-0 min-h-[330mm] flex flex-col justify-between"
       style={{
         boxSizing: "border-box",
         borderColor: "#f1f5f9",

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   Lock, 
   User, 
@@ -53,6 +53,7 @@ export default function App() {
   // Loading and Sync states
   const [isLoadingFromFirebase, setIsLoadingFromFirebase] = useState<boolean>(true);
   const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(true);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   // Persistent App Databases (Loaded initially from local, then synchronized with Firebase Firestore)
   const [pegawaiList, setPegawaiList] = useState<Pegawai[]>(() => {
@@ -85,12 +86,12 @@ export default function App() {
   // For selecting a specific pegawai to print
   const [selectedPegawaiForCetak, setSelectedPegawaiForCetak] = useState<Pegawai | null>(null);
 
-  // 1. Initial Synchronisation with Google Firebase Firestore
+  // 1. Initial Synchronisation with MongoDB Atlas Cloud Database
   useEffect(() => {
     let containerActive = true;
-    async function loadDataFromFirebase() {
+    async function loadDataFromMongoDB() {
       try {
-        console.log("Menghubungkan ke Firebase Cloud Firestore...");
+        console.log("Menghubungkan ke MongoDB Atlas Cloud Database...");
         
         // Fetch all essential datasets from cloud collections
         const remotePegawai = await getPegawaiFromFirestore();
@@ -105,8 +106,8 @@ export default function App() {
             setPegawaiList(remotePegawai);
             localStorage.setItem("skgb_pegawai", JSON.stringify(remotePegawai));
           } else {
-            console.log("Firestore pegawai kosong, mengunggah data bawaan awal...");
-            // Seed pegawai to Firestore if remote is blank
+            console.log("MongoDB pegawai kosong, mengunggah data bawaan awal...");
+            // Seed pegawai if remote is blank
             for (const peg of initialPegawaiList) {
               await savePegawaiToFirestore(peg);
             }
@@ -116,7 +117,7 @@ export default function App() {
             setSettings(remoteSettings);
             localStorage.setItem("skgb_settings", JSON.stringify(remoteSettings));
           } else {
-            console.log("Firestore settings kosong, mengunggah settings bawaan...");
+            console.log("MongoDB settings kosong, mengunggah settings bawaan...");
             await saveSettingsToFirestore(initialSystemSettings);
           }
 
@@ -124,7 +125,7 @@ export default function App() {
             setLogs(remoteLogs);
             localStorage.setItem("skgb_logs", JSON.stringify(remoteLogs));
           } else {
-            console.log("Firestore logs kosong, mengunggah rekam aktivitas awal...");
+            console.log("MongoDB logs kosong, mengunggah rekam aktivitas awal...");
             for (const log of initialActivityLogs) {
               await saveLogToFirestore(log);
             }
@@ -145,16 +146,20 @@ export default function App() {
               }
             }
           } else {
-            console.log("Firestore staff kosong, mengunggah staf bawaan awal...");
+            console.log("MongoDB staff kosong, mengunggah staf bawaan awal...");
             for (const st of initialStaffUserList) {
               await saveStaffToFirestore(st);
             }
           }
         }
-      } catch (err) {
-        console.error("Gagal sinkronisasi data dengan Firebase Firestore:", err);
+      } catch (err: any) {
+        console.error("Gagal sinkronisasi data awal dengan MongoDB Atlas:", err);
         if (containerActive) {
           setIsFirebaseConnected(false);
+          const errMsg = err?.message || "";
+          if (errMsg.includes("KONEKSI_DIBLOKIR_IP_WHITELIST")) {
+            setConnectionError(errMsg);
+          }
         }
       } finally {
         if (containerActive) {
@@ -162,11 +167,93 @@ export default function App() {
         }
       }
     }
-    loadDataFromFirebase();
+    loadDataFromMongoDB();
     return () => {
       containerActive = false;
     };
   }, []);
+
+  // Keep references of the latest states to prevent tearing/recreating background poller interval
+  const stateRef = useRef({ pegawaiList, settings, logs, staffList, activeUser });
+  useEffect(() => {
+    stateRef.current = { pegawaiList, settings, logs, staffList, activeUser };
+  }, [pegawaiList, settings, logs, staffList, activeUser]);
+
+  // 2. Real-time background sync polling (MongoDB Atlas - Auto-sync without manual refresh)
+  useEffect(() => {
+    if (isLoadingFromFirebase) return; // Wait until initial hydration is complete
+
+    const intervalId = setInterval(async () => {
+      try {
+        const remotePegawai = await getPegawaiFromFirestore();
+        const remoteSettings = await getSettingsFromFirestore();
+        const remoteLogs = await getLogsFromFirestore();
+        const remoteStaff = await getStaffFromFirestore();
+
+        const current = stateRef.current;
+
+        // Sync Pegawai list
+        if (remotePegawai && remotePegawai.length > 0) {
+          const currentStr = JSON.stringify(current.pegawaiList);
+          const remoteStr = JSON.stringify(remotePegawai);
+          if (currentStr !== remoteStr) {
+            console.log("Real-time sync: Terdeteksi perubahan data pegawai di MongoDB Atlas. Sinkronisasi...");
+            setPegawaiList(remotePegawai);
+          }
+        }
+
+        // Sync Settings
+        if (remoteSettings) {
+          const currentStr = JSON.stringify(current.settings);
+          const remoteStr = JSON.stringify(remoteSettings);
+          if (currentStr !== remoteStr) {
+            console.log("Real-time sync: Terdeteksi perubahan preferensi kop/tte di MongoDB Atlas. Sinkronisasi...");
+            setSettings(remoteSettings);
+          }
+        }
+
+        // Sync Logs
+        if (remoteLogs && remoteLogs.length > 0) {
+          const currentStr = JSON.stringify(current.logs);
+          const remoteStr = JSON.stringify(remoteLogs);
+          if (currentStr !== remoteStr) {
+            console.log("Real-time sync: Terdeteksi aktivitas baru dari admin lain di MongoDB Atlas. Sinkronisasi...");
+            setLogs(remoteLogs);
+          }
+        }
+
+        // Sync Staff Accounts
+        if (remoteStaff && remoteStaff.length > 0) {
+          const currentStr = JSON.stringify(current.staffList);
+          const remoteStr = JSON.stringify(remoteStaff);
+          if (currentStr !== remoteStr) {
+            console.log("Real-time sync: Terdeteksi perubahan akun staf di MongoDB Atlas. Sinkronisasi...");
+            setStaffList(remoteStaff);
+            
+            // Sync activeUser credential if it's updated in remote
+            if (current.activeUser) {
+              const updatedActive = remoteStaff.find(s => s.id === current.activeUser?.id);
+              if (updatedActive && JSON.stringify(updatedActive) !== JSON.stringify(current.activeUser)) {
+                setActiveUser(updatedActive);
+              }
+            }
+          }
+        }
+
+        setIsFirebaseConnected(true);
+        setConnectionError(null); // Clear error if connection succeeded
+      } catch (err: any) {
+        console.warn("Sinkronisasi real-time latar belakang gagal:", err);
+        setIsFirebaseConnected(false);
+        const errMsg = err?.message || "";
+        if (errMsg.includes("KONEKSI_DIBLOKIR_IP_WHITELIST")) {
+          setConnectionError(errMsg);
+        }
+      }
+    }, 4000); // 4 seconds polling for real-time responsiveness
+
+    return () => clearInterval(intervalId);
+  }, [isLoadingFromFirebase]);
 
   // Backup sync state to LocalStorage for safety and instant response
   useEffect(() => {
@@ -299,7 +386,7 @@ export default function App() {
       
       Swal.fire({
         title: "Staf Didaftarkan!",
-        html: `Akun <strong class="text-indigo-600">${newStaff.name}</strong> berhasil dibuat dan disinkronkan ke server Firebase.`,
+        html: `Akun <strong class="text-indigo-600">${newStaff.name}</strong> berhasil dibuat dan disinkronkan ke server MongoDB Atlas.`,
         icon: "success",
         confirmButtonColor: "#4f46e5",
       });
@@ -307,7 +394,7 @@ export default function App() {
       console.error(err);
       Swal.fire({
         title: "Kesalahan",
-        text: "Gagal menyimpan akun ke database Firebase.",
+        text: "Gagal menyimpan akun ke database MongoDB Atlas.",
         icon: "error"
       });
     }
@@ -380,7 +467,7 @@ export default function App() {
           
           Swal.fire({
             title: "Akun Dihapus!",
-            text: "Akun telah aman dihapus dari server cloud Firebase.",
+            text: "Akun telah aman dihapus dari server cloud MongoDB Atlas.",
             icon: "success",
             confirmButtonColor: "#4f46e5"
           });
@@ -405,7 +492,7 @@ export default function App() {
       
       Swal.fire({
         title: "Pegawai Ditambahkan!",
-        html: `Data pegawai <strong class="text-indigo-600">${newPeg.nama}</strong> berhasil disimpan dan disinkronkan secara permanen di database cloud Firebase.`,
+        html: `Data pegawai <strong class="text-indigo-600">${newPeg.nama}</strong> berhasil disimpan dan disinkronkan secara permanen di database cloud MongoDB Atlas.`,
         icon: "success",
         confirmButtonColor: "#4f46e5",
         confirmButtonText: "Selesai",
@@ -414,7 +501,7 @@ export default function App() {
       console.error(err);
       Swal.fire({
         title: "Galat Penyimpanan",
-        text: "Data gagal dikirim ke Firestore. Sinkronisasi lokal tetap diaktifkan.",
+        text: "Data gagal dikirim ke MongoDB Atlas. Sinkronisasi lokal tetap diaktifkan.",
         icon: "error",
         confirmButtonColor: "#e11d48"
       });
@@ -424,7 +511,7 @@ export default function App() {
   const handleImportPegawaiBatch = async (newPegs: Pegawai[]) => {
     Swal.fire({
       title: "Mengimpor Data Pegawai...",
-      html: "Sedang mengunggah dan mensinkronisasikan data ke database cloud Firebase. Mohon tunggu...",
+      html: "Sedang mengunggah dan mensinkronisasikan data ke database cloud MongoDB Atlas. Mohon tunggu...",
       allowOutsideClick: false,
       didOpen: () => {
         Swal.showLoading();
@@ -441,7 +528,7 @@ export default function App() {
       
       Swal.fire({
         title: "Import Berhasil!",
-        html: `Berhasil menyimpan dan mensinkronisasikan <strong>${newPegs.length} pegawai</strong> secara permanen ke database cloud Firebase.`,
+        html: `Berhasil menyimpan dan mensinkronisasikan <strong>${newPegs.length} pegawai</strong> secara permanen ke database cloud MongoDB Atlas.`,
         icon: "success",
         confirmButtonColor: "#4f46e5",
         confirmButtonText: "Selesai"
@@ -507,7 +594,7 @@ export default function App() {
 
           Swal.fire({
             title: "Dihapus!",
-            text: "Data pegawai telah dihapus secara permanen dari server cloud Firebase.",
+            text: "Data pegawai telah dihapus secara permanen dari server cloud MongoDB Atlas.",
             icon: "success",
             confirmButtonColor: "#4f46e5",
           });
@@ -527,7 +614,7 @@ export default function App() {
   const handleClearAllPegawai = () => {
     Swal.fire({
       title: "Konfirmasi Hapus Semua Data",
-      html: `Apakah Anda benar-benar yakin ingin menghapus <strong class="text-rose-600">SEMUA data pegawai</strong> di dalam tabel? <br><br>Semua rekam data pegawai akan dihapus permanen dari cloud Firestore dan tidak dapat dikembalikan.`,
+      html: `Apakah Anda benar-benar yakin ingin menghapus <strong class="text-rose-600">SEMUA data pegawai</strong> di dalam tabel? <br><br>Semua rekam data pegawai akan dihapus permanen dari cloud MongoDB Atlas dan tidak dapat dikembalikan.`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Ya, Hapus Semua!",
@@ -576,7 +663,7 @@ export default function App() {
 
       Swal.fire({
         title: "Konfigurasi Disimpan!",
-        text: "Seluruh preferensi spesimen kop dinas, regulasi, dan TTE berhasil disinkronkan ke server Firebase.",
+        text: "Seluruh preferensi spesimen kop dinas, regulasi, dan TTE berhasil disinkronkan ke server MongoDB Atlas.",
         icon: "success",
         confirmButtonColor: "#4f46e5",
         confirmButtonText: "Oke",
@@ -610,11 +697,11 @@ export default function App() {
         </div>
         <h2 className="text-xl font-extrabold text-white tracking-tight">Menghubungkan Database Cloud</h2>
         <p className="text-slate-400 text-xs mt-2 max-w-sm leading-relaxed">
-          Sedang menyinkronkan data SKGB dengan server Firebase Firestore terproteksi Wilayah XIII Provinsi Jawa Barat...
+          Sedang menyinkronkan data SKGB dengan server MongoDB Atlas terproteksi Wilayah XIII Provinsi Jawa Barat...
         </p>
-        <div className="mt-6 flex items-center gap-1 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 text-[10px] font-semibold text-indigo-300">
-          <CloudLightning size={12} />
-          <span>Google Cloud Run & Firestore Secured Session</span>
+        <div className="mt-6 flex items-center gap-1 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 text-[10px] font-semibold text-emerald-400">
+          <CloudLightning size={12} className="animate-pulse" />
+          <span>MongoDB Atlas Connected & Real-time Auto-Sync Active</span>
         </div>
       </div>
     );
@@ -637,7 +724,19 @@ export default function App() {
         />
 
         {/* Core Screen Area */}
-        <main className="flex-1 p-6 md:p-8 overflow-y-auto print:p-0 print:overflow-visible">
+        <main className="flex-1 p-6 md:p-8 overflow-y-auto print:p-0 print:overflow-visible animate-fadeIn">
+          
+          {connectionError && (
+            <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl text-xs space-y-2">
+              <div className="flex items-center gap-2 font-bold text-rose-900">
+                <ShieldAlert size={16} />
+                <span>Koneksi Database Cloud Terhambat (MongoDB Atlas Whitelist)</span>
+              </div>
+              <p className="leading-relaxed text-slate-700">
+                IP server hosting aplikasi saat ini belum di-whitelist di dasbor MongoDB Atlas Anda. Untuk performa sinkronisasi database antar-staf yang optimal, silakan tambahkan IP <code className="bg-rose-100 px-1 py-0.5 rounded font-mono font-bold text-rose-650">0.0.0.0/0</code> (Allow Access from Anywhere) pada menu <strong>Network Access</strong> di dasbor Atlas Anda.
+              </p>
+            </div>
+          )}
           
           {/* TAB 1: DASHBOARD */}
           {currentTab === "dashboard" && (
@@ -753,6 +852,29 @@ export default function App() {
               Silakan masuk menggunakan akun koordinasi Kepegawaian Anda.
             </p>
           </div>
+
+          {connectionError && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl text-xs space-y-2.5">
+              <div className="flex items-center gap-2 font-bold text-rose-900">
+                <ShieldAlert size={16} />
+                <span>IP Whitelist MongoDB Atlas</span>
+              </div>
+              <p className="leading-relaxed text-slate-700">
+                IP server hosting aplikasi ini belum terdaftar di whitelist MongoDB Atlas Anda. Hal ini normal terjadi karena alamat IP container hosting dinamis.
+              </p>
+              <div className="bg-white p-2.5 rounded-lg border border-rose-100 space-y-1.5 text-[11px] text-slate-700">
+                <div className="font-bold text-slate-900 mb-1">Langkah Mudah Penyelesaian:</div>
+                <div>1. Masuk ke dasbor <span className="font-semibold text-indigo-600">MongoDB Atlas</span> Anda</div>
+                <div>2. Pilih menu <span className="font-semibold text-slate-800">Network Access</span> di panel kiri</div>
+                <div>3. Klik tombol <span className="font-semibold text-slate-800">Add IP Address</span></div>
+                <div>4. Klik tombol <span className="font-semibold text-emerald-600">Allow Access from Anywhere</span> (akan mengisi <code className="bg-slate-100 px-1 py-0.5 rounded font-mono font-bold text-rose-600">0.0.0.0/0</code>)</div>
+                <div>5. Klik <span className="font-semibold text-slate-800">Confirm</span> & tunggu 1 menit hingga statusnya <span className="text-emerald-600 font-bold">Active</span>.</div>
+              </div>
+              <p className="text-[10px] text-rose-700 italic">
+                Setelah itu, silakan muat ulang (refresh) halaman ini untuk otomatis terhubung.
+              </p>
+            </div>
+          )}
 
           <form onSubmit={handleLogin} className="space-y-4">
             

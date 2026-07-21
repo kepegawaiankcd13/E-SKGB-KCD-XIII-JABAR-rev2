@@ -13,10 +13,10 @@
   /* Suppress browser margins, headers and footers */
   @page {
     size: 215mm 330mm; /* F4 / Folio portrait */
-    margin-top: 4mm;    /* Margin atas lebih aman agar tidak terpotong, sedikit ke atas */
+    margin-top: 3mm;    /* Margin atas lebih aman agar tidak terpotong, sedikit ke atas */
     margin-bottom: 5mm;
-    margin-left: 10mm;   /* Margin kiri 1cm agar KOP lebih lebar */
-    margin-right: 10mm;  /* Margin kanan 1cm agar KOP lebih lebar */
+    margin-left: 15mm;   /* Margin kiri 1.5cm agar lebih lebar dan rapi */
+    margin-right: 15mm;  /* Margin kanan 1.5cm agar lebih lebar dan rapi */
   }
 
   body, html {
