@@ -21,7 +21,7 @@ const DB_NAME = "kepeg13_db";
 async function getDb() {
   let uri = process.env.MONGODB_URI;
   if (!uri) {
-    throw new Error("Missing MONGODB_URI environment variable.");
+    throw new Error("Missing MONGODB_URI environment variable. Silakan tambahkan variabel lingkungan `MONGODB_URI` di menu Settings -> Secrets pada Google AI Studio Build.");
   }
   
   // Clean potential outer quotes and whitespaces

@@ -101,7 +101,17 @@ export default function App() {
       });
 
       const res = await fetch("/api/migrate-from-firebase", { method: "POST" });
-      const json = await res.json();
+      const contentType = res.headers.get("content-type");
+      let json;
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        if (text.trim().startsWith("<!doctype") || text.trim().startsWith("<html")) {
+          throw new Error("Koneksi server gagal atau sedang memproses ulang. Silakan segarkan halaman (refresh) dalam beberapa saat.");
+        }
+        throw new Error(text || "Format respon server tidak valid.");
+      } else {
+        json = await res.json();
+      }
       if (json.success) {
         Swal.fire({
           icon: "success",
@@ -234,7 +244,7 @@ export default function App() {
         if (containerActive) {
           setIsFirebaseConnected(false);
           const errMsg = err?.message || "";
-          if (errMsg.includes("KONEKSI_DIBLOKIR_IP_WHITELIST")) {
+          if (errMsg.includes("KONEKSI_DIBLOKIR_IP_WHITELIST") || errMsg.includes("MONGODB_URI_MISSING")) {
             setConnectionError(errMsg);
           }
         }
@@ -808,14 +818,28 @@ export default function App() {
         <main className="flex-1 p-6 md:p-8 overflow-y-auto print:p-0 print:overflow-visible animate-fadeIn">
           
           {connectionError && (
-            <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl text-xs space-y-2 print:hidden">
-              <div className="flex items-center gap-2 font-bold text-rose-900">
-                <ShieldAlert size={16} />
-                <span>Koneksi Database Cloud Terhambat (MongoDB Atlas Whitelist)</span>
-              </div>
-              <p className="leading-relaxed text-slate-700">
-                IP server hosting aplikasi saat ini belum di-whitelist di dasbor MongoDB Atlas Anda. Untuk performa sinkronisasi database antar-staf yang optimal, silakan tambahkan IP <code className="bg-rose-100 px-1 py-0.5 rounded font-mono font-bold text-rose-650">0.0.0.0/0</code> (Allow Access from Anywhere) pada menu <strong>Network Access</strong> di dasbor Atlas Anda.
-              </p>
+            <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl text-xs space-y-2 print:hidden font-sans">
+              {connectionError.includes("MONGODB_URI_MISSING") ? (
+                <>
+                  <div className="flex items-center gap-2 font-bold text-rose-900">
+                    <ShieldAlert size={16} />
+                    <span>Variabel Lingkungan MONGODB_URI Belum Dikonfigurasi</span>
+                  </div>
+                  <p className="leading-relaxed text-slate-700">
+                    Sistem E-SKGB saat ini menggunakan MongoDB Atlas Cloud Database untuk sinkronisasi data antar-staf secara realtime. Silakan tambahkan variabel <code className="bg-rose-100 px-1 py-0.5 rounded font-mono font-bold text-rose-650">MONGODB_URI</code> di menu <strong>Settings &rarr; Secrets</strong> pada Google AI Studio Build Anda. Formatnya: <code className="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-slate-800">{"mongodb+srv://<username>:<password>@<cluster>.mongodb.net/kepeg13_db"}</code>.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 font-bold text-rose-900">
+                    <ShieldAlert size={16} />
+                    <span>Koneksi Database Cloud Terhambat (MongoDB Atlas Whitelist)</span>
+                  </div>
+                  <p className="leading-relaxed text-slate-700">
+                    IP server hosting aplikasi saat ini belum di-whitelist di dasbor MongoDB Atlas Anda. Untuk performa sinkronisasi database antar-staf yang optimal, silakan tambahkan IP <code className="bg-rose-100 px-1 py-0.5 rounded font-mono font-bold text-rose-650">0.0.0.0/0</code> (Allow Access from Anywhere) pada menu <strong>Network Access</strong> di dasbor Atlas Anda.
+                  </p>
+                </>
+              )}
             </div>
           )}
           
