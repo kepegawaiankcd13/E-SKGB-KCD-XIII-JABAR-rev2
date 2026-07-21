@@ -23,13 +23,17 @@ interface DashboardProps {
   logs: ActivityLog[];
   onNavigateToTab: (tab: string) => void;
   onSelectPegawaiForSKGB: (pegawai: Pegawai) => void;
+  onMigrateFromFirebase?: () => Promise<void>;
+  isMigrating?: boolean;
 }
 
 export default function Dashboard({ 
   pegawaiList, 
   logs, 
   onNavigateToTab, 
-  onSelectPegawaiForSKGB 
+  onSelectPegawaiForSKGB,
+  onMigrateFromFirebase,
+  isMigrating
 }: DashboardProps) {
   
   // Calculations
@@ -105,6 +109,47 @@ export default function Dashboard({
 
   return (
     <div className="space-y-6">
+      {/* MongoDB Empty Data Warning & Firebase Migration Offer Banner */}
+      {totalPegawai === 0 && onMigrateFromFirebase && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 shadow-sm animate-fade-in font-sans">
+          <div className="flex gap-4">
+            <div className="p-3 bg-amber-100 text-amber-800 rounded-xl shrink-0 h-max mt-0.5">
+              <Info size={22} className="animate-pulse" />
+            </div>
+            <div>
+              <h4 className="text-sm font-extrabold text-slate-900 tracking-tight">
+                Database Pegawai Kosong di MongoDB Atlas
+              </h4>
+              <p className="text-[11px] text-slate-650 mt-1 max-w-2xl leading-relaxed">
+                Apakah Anda sebelumnya sudah mengimpor data di sistem cloud lama? Jangan khawatir! Anda dapat menekan tombol migrasi di bawah untuk menarik kembali semua data pegawai, pengaturan KOP/spesimen, rekam aktivitas, dan akun staff dari Firebase ke MongoDB Atlas secara instan.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onMigrateFromFirebase}
+            disabled={isMigrating}
+            className={`px-4 py-2.5 text-[10px] uppercase tracking-wider font-extrabold rounded-xl text-white shadow-sm transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer shrink-0 self-start md:self-center ${
+              isMigrating 
+                ? "bg-amber-400 cursor-not-allowed" 
+                : "bg-indigo-650 hover:bg-indigo-700 hover:shadow-indigo-100"
+            }`}
+          >
+            {isMigrating ? (
+              <>
+                <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <span>Sedang Memigrasikan...</span>
+              </>
+            ) : (
+              <span>Migrasikan Data dari Firebase</span>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Upper Banner Block */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-6 md:p-8 shadow-lg border border-slate-850 relative overflow-hidden">
         <div className="absolute right-0 top-0 translate-x-12 -translate-y-12 w-64 h-64 bg-white/5 rounded-full blur-2xl"></div>

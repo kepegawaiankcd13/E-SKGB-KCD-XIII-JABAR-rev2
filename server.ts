@@ -234,6 +234,100 @@ app.delete("/api/staff_users/:id", async (req, res) => {
   }
 });
 
+// 5. Firebase to MongoDB Atlas Migration Endpoint
+app.post("/api/migrate-from-firebase", async (req, res) => {
+  try {
+    const fs = await import("fs");
+    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+    if (!fs.existsSync(configPath)) {
+      return res.status(404).json({ success: false, error: "Berkas konfigurasi Firebase (firebase-applet-config.json) tidak ditemukan." });
+    }
+    
+    const configRaw = fs.readFileSync(configPath, "utf-8");
+    const firebaseConfig = JSON.parse(configRaw);
+    
+    const projectId = firebaseConfig.projectId;
+    const databaseId = firebaseConfig.firestoreDatabaseId || "(default)";
+    const apiKey = firebaseConfig.apiKey;
+    
+    if (!projectId || !apiKey) {
+      return res.status(400).json({ success: false, error: "Konfigurasi Firebase tidak lengkap (missing projectId or apiKey)." });
+    }
+
+    const collections = ["pegawai", "settings", "activity_logs", "staff_users"];
+    const db = await getDb();
+    const stats: any = {};
+
+    function parseFirestoreValue(val: any): any {
+      if (!val) return null;
+      if ('stringValue' in val) return val.stringValue;
+      if ('integerValue' in val) return parseInt(val.integerValue, 10);
+      if ('doubleValue' in val) return parseFloat(val.doubleValue);
+      if ('booleanValue' in val) return val.booleanValue;
+      if ('mapValue' in val) {
+        const obj: any = {};
+        const fields = val.mapValue.fields || {};
+        for (const key of Object.keys(fields)) {
+          obj[key] = parseFirestoreValue(fields[key]);
+        }
+        return obj;
+      }
+      if ('arrayValue' in val) {
+        const arr = val.arrayValue.values || [];
+        return arr.map((item: any) => parseFirestoreValue(item));
+      }
+      if ('nullValue' in val) return null;
+      return null;
+    }
+
+    function parseFirestoreDoc(doc: any): any {
+      const fields = doc.fields || {};
+      const obj: any = {};
+      for (const key of Object.keys(fields)) {
+        obj[key] = parseFirestoreValue(fields[key]);
+      }
+      if (!obj.id && doc.name) {
+        const parts = doc.name.split('/');
+        obj.id = parts[parts.length - 1];
+      }
+      return obj;
+    }
+
+    for (const col of collections) {
+      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/${col}?pageSize=5000&key=${apiKey}`;
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        console.warn(`Gagal mengambil data koleksi ${col} dari Firebase REST API:`, response.statusText);
+        stats[col] = 0;
+        continue;
+      }
+
+      const json: any = await response.json();
+      const documents = json.documents || [];
+      
+      let migratedCount = 0;
+      const mongoCol = db.collection<any>(col);
+
+      for (const doc of documents) {
+        const parsed = parseFirestoreDoc(doc);
+        if (parsed.id) {
+          const docToSave = { ...parsed, _id: parsed.id };
+          await mongoCol.replaceOne({ _id: parsed.id }, docToSave, { upsert: true });
+          migratedCount++;
+        }
+      }
+      
+      stats[col] = migratedCount;
+    }
+
+    res.json({ success: true, stats });
+  } catch (error: any) {
+    console.error("Error migrating from Firebase:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // -------------------------------------------------------------
 // VITE DEV SERVER OR STATIC FILE SERVING FOR PRODUCTION
 // -------------------------------------------------------------

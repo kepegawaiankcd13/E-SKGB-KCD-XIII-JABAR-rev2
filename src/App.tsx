@@ -86,18 +86,86 @@ export default function App() {
   // For selecting a specific pegawai to print
   const [selectedPegawaiForCetak, setSelectedPegawaiForCetak] = useState<Pegawai | null>(null);
 
-  // 1. Initial Synchronisation with MongoDB Atlas Cloud Database
+  const [isMigrating, setIsMigrating] = useState<boolean>(false);
+
+  const handleMigrateFromFirebase = async () => {
+    setIsMigrating(true);
+    try {
+      Swal.fire({
+        title: "Memulai Migrasi Data",
+        text: "Silakan tunggu, sistem sedang memindahkan database pegawai, KOP, logs, dan akun staff dari Firebase ke MongoDB Atlas...",
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+
+      const res = await fetch("/api/migrate-from-firebase", { method: "POST" });
+      const json = await res.json();
+      if (json.success) {
+        Swal.fire({
+          icon: "success",
+          title: "Migrasi Berhasil!",
+          text: `Berhasil memindahkan: ${json.stats.pegawai} Pegawai, ${json.stats.settings ? 1 : 0} Pengaturan, ${json.stats.activity_logs} Rekam Aktivitas, dan ${json.stats.staff_users} Akun Staf dari Firebase ke MongoDB Atlas!`,
+          confirmButtonColor: "#4f46e5"
+        });
+        
+        // Reload all data concurrently
+        setIsLoadingFromFirebase(true);
+        const [remotePegawai, remoteSettings, remoteLogs, remoteStaff] = await Promise.all([
+          getPegawaiFromFirestore(),
+          getSettingsFromFirestore(),
+          getLogsFromFirestore(),
+          getStaffFromFirestore()
+        ]);
+        
+        if (remotePegawai && remotePegawai.length > 0) {
+          setPegawaiList(remotePegawai);
+          localStorage.setItem("skgb_pegawai", JSON.stringify(remotePegawai));
+        }
+        if (remoteSettings) {
+          setSettings(remoteSettings);
+          localStorage.setItem("skgb_settings", JSON.stringify(remoteSettings));
+        }
+        if (remoteLogs && remoteLogs.length > 0) {
+          setLogs(remoteLogs);
+          localStorage.setItem("skgb_logs", JSON.stringify(remoteLogs));
+        }
+        if (remoteStaff && remoteStaff.length > 0) {
+          setStaffList(remoteStaff);
+          localStorage.setItem("skgb_staff", JSON.stringify(remoteStaff));
+        }
+      } else {
+        throw new Error(json.error || "Gagal memproses migrasi data.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      Swal.fire({
+        icon: "error",
+        title: "Migrasi Gagal",
+        text: err.message || "Terjadi kesalahan saat memindahkan data dari Firebase.",
+        confirmButtonColor: "#ef4444"
+      });
+    } finally {
+      setIsMigrating(false);
+      setIsLoadingFromFirebase(false);
+    }
+  };
+
+  // 1. Initial Synchronisation with MongoDB Atlas Cloud Database (Optimized Concurrently)
   useEffect(() => {
     let containerActive = true;
     async function loadDataFromMongoDB() {
       try {
-        console.log("Menghubungkan ke MongoDB Atlas Cloud Database...");
+        console.log("Menghubungkan ke MongoDB Atlas Cloud Database secara Paralel...");
         
-        // Fetch all essential datasets from cloud collections
-        const remotePegawai = await getPegawaiFromFirestore();
-        const remoteSettings = await getSettingsFromFirestore();
-        const remoteLogs = await getLogsFromFirestore();
-        const remoteStaff = await getStaffFromFirestore();
+        // Fetch all essential datasets from cloud collections concurrently (huge speedup!)
+        const [remotePegawai, remoteSettings, remoteLogs, remoteStaff] = await Promise.all([
+          getPegawaiFromFirestore(),
+          getSettingsFromFirestore(),
+          getLogsFromFirestore(),
+          getStaffFromFirestore()
+        ]);
 
         if (containerActive) {
           setIsFirebaseConnected(true);
@@ -188,16 +256,18 @@ export default function App() {
     stateRef.current = { pegawaiList, settings, logs, staffList, activeUser };
   }, [pegawaiList, settings, logs, staffList, activeUser]);
 
-  // 2. Real-time background sync polling (MongoDB Atlas - Auto-sync without manual refresh)
+  // 2. Real-time background sync polling (MongoDB Atlas - Optimized Concurrently)
   useEffect(() => {
     if (isLoadingFromFirebase) return; // Wait until initial hydration is complete
 
     const intervalId = setInterval(async () => {
       try {
-        const remotePegawai = await getPegawaiFromFirestore();
-        const remoteSettings = await getSettingsFromFirestore();
-        const remoteLogs = await getLogsFromFirestore();
-        const remoteStaff = await getStaffFromFirestore();
+        const [remotePegawai, remoteSettings, remoteLogs, remoteStaff] = await Promise.all([
+          getPegawaiFromFirestore(),
+          getSettingsFromFirestore(),
+          getLogsFromFirestore(),
+          getStaffFromFirestore()
+        ]);
 
         const current = stateRef.current;
 
@@ -756,6 +826,8 @@ export default function App() {
               logs={logs} 
               onNavigateToTab={setCurrentTab}
               onSelectPegawaiForSKGB={handleSelectPegawaiForSKGB}
+              onMigrateFromFirebase={handleMigrateFromFirebase}
+              isMigrating={isMigrating}
             />
           )}
 
@@ -824,6 +896,8 @@ export default function App() {
               settings={settings}
               onUpdateSettings={handleUpdateSettings}
               onLogActivity={handleLogActivity}
+              onMigrateFromFirebase={handleMigrateFromFirebase}
+              isMigrating={isMigrating}
             />
           )}
 
